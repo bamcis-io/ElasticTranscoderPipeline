@@ -52,7 +52,7 @@ you CloudFormation template:
             }
         },
 
-And this will create an Elastic Transcoder Pipeline with you parameters specified in the `Parameters` section of the CF template.
+And this will create an Elastic Transcoder Pipeline with the parameters specified in the `Parameters` section of the CF template.
 
 ## Revision History
 
