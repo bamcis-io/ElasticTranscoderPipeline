@@ -16,14 +16,14 @@ you CloudFormation template:
 	"Pipeline" : {
 		"Type" : "Custom::ElasticTranscoderPipeline",
 			"Properties" : {
-                "ServiceToken" : {
-                    "Ref" : "ElasticTranscoderPipelineArn"
+				"ServiceToken" : {
+					"Ref" : "ElasticTranscoderPipelineArn"
                 },
                 "Role"         : {
-                    "Fn::GetAtt" : [
-                        "ElasticTranscoderExecutionRole",
-                        "Arn"
-                    ]
+					"Fn::GetAtt" : [
+						"ElasticTranscoderExecutionRole",
+						"Arn"
+					]
                 },
                 "Name"         : {
                     "Ref" : "PipelineName"

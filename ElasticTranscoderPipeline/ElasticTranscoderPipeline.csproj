@@ -8,6 +8,12 @@
 Creates a serverless application that can be used as a custom resource in CloudFormation to create
 Elastic Transcoder Pipelines.</Description>
     <Copyright>BAMCIS</Copyright>
+    <PackageLicenseUrl>https://raw.githubusercontent.com/bamcis-io/ElasticTranscoderPipeline/master/LICENSE</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/bamcis-io/ElasticTranscoderPipeline</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/bamcis-io/ElasticTranscoderPipeline</RepositoryUrl>
+    <RepositoryType>Git</RepositoryType>
+    <PackageTags>AWS ElasticTranscoder Lambda</PackageTags>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
   <ItemGroup>
