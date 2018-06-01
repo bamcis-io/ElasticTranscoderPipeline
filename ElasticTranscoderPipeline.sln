@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27703.2018
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ElasticTranscoderPipeline", "ElasticTranscoderPipeline\ElasticTranscoderPipeline.csproj", "{9CDB4340-9157-4AE8-85E9-61728866388E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ElasticTranscoderPipeline.Tests", "ElasticTranscoderPipeline.Tests\ElasticTranscoderPipeline.Tests.csproj", "{F0571F22-9769-42E4-A866-91654BECF4BC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{3884BDCD-D7F8-4A60-8AA9-08BB8CD8F46E}"
+	ProjectSection(SolutionItems) = preProject
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9CDB4340-9157-4AE8-85E9-61728866388E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9CDB4340-9157-4AE8-85E9-61728866388E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9CDB4340-9157-4AE8-85E9-61728866388E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9CDB4340-9157-4AE8-85E9-61728866388E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F0571F22-9769-42E4-A866-91654BECF4BC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F0571F22-9769-42E4-A866-91654BECF4BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F0571F22-9769-42E4-A866-91654BECF4BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F0571F22-9769-42E4-A866-91654BECF4BC}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4E9F4E08-7A42-4ADE-9072-BCA431283433}
+	EndGlobalSection
+EndGlobal

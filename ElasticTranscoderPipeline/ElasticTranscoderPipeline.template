@@ -1,0 +1,203 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Transform"                : "AWS::Serverless-2016-10-31",
+    "Description"              : "Creates the lambda function that will be used as a custom resource to deploy Elastic Transcoder pipelines.",
+
+
+    "Parameters"               : {
+        "LogRetentionInDays" : {
+            "Type" : "Number",
+            "Description" : "The number of days to retain the CloudWatch Logs for the function. If this is set to 0, it will be infinite retention.",
+            "MinValue"    : 0,
+            "Default"     : 30
+        },
+        "OrganizationTag"    : {
+            "Description" : "The organization this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "^\\S{2,}$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$"
+        },
+        "ApplicationTag"     : {
+            "Description" : "The application this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "^\\S{2,}$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$"
+        },
+        "EnvironmentTag"     : {
+            "Description" : "The environment this account is associated with",
+            "Type"        : "String",
+            "AllowedPattern" : "^\\S{2,}$",
+            "ConstraintDescription" : "Member must satisfy regular expression pattern: ^\\S{2,}$"
+        }
+    },
+
+
+    "Conditions"               : {
+        "InfiniteRetention" : {
+            "Fn::Equals" : [
+                {
+                    "Ref" : "LogRetentionInDays"
+                },
+                0
+            ]
+        }
+    },
+
+
+    "Resources"                : {
+        "LambdaExecutionRole" : {
+            "Type" : "AWS::IAM::Role",
+            "Properties" : {
+                "RoleName" : "LambdaElasticTranscoderPipeline",
+                "AssumeRolePolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "sts:AssumeRole"
+                            ],
+                            "Principal" : {
+                                "Service" : [
+                                    "lambda.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaCWLPolicy"     : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaCWLAreWeUpPolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "logs:CreateLogStream",
+                                "logs:CreateLogGroup",
+                                "logs:DescribeLogStreams",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogGroups"
+                            ],
+                            "Resource" : {
+                                "Fn::Join" : [
+                                    "",
+                                    [
+                                        "arn:aws:logs:*:",
+                                        {
+                                            "Ref" : "AWS::AccountId"
+                                        },
+                                        ":*"
+                                    ]
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+        "LambdaETPolicy"      : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+                "PolicyName" : "LambdaElasticTranscoderPipelinePolicy",
+                "PolicyDocument" : {
+                    "Version" : "2012-10-17",
+                    "Statement" : [
+                        {
+                            "Effect" : "Allow",
+                            "Action" : [
+                                "elastictranscoder:CreatePipeline",
+                                "elastictranscoder:DeletePipeline",
+                                "elastictranscoder:UpdatePipeline",
+                                "elastictranscoder:UpdatePipelineNotifications",
+                                "elastictranscoder:UpdatePipelineStatus"
+                            ],
+                            "Resource" : [
+                                "*"
+                            ]
+                        }
+                    ]
+                },
+                "Roles"          : [
+                    {
+                        "Ref" : "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+
+
+        "CloudWatchLogGroup"  : {
+            "Type" : "AWS::Logs::LogGroup",
+            "Properties" : {
+                "LogGroupName" : "/aws/lambda/ElasticTranscoderPipeline",
+                "RetentionInDays" : {
+                    "Fn::If" : [
+                        "InfiniteRetention",
+                        {
+                            "Ref" : "AWS::NoValue"
+                        },
+                        {
+                            "Ref" : "LogRetentionInDays"
+                        }
+                    ]
+                }
+            }
+        },
+
+
+        "LambdaFunction"      : {
+            "Type" : "AWS::Serverless::Function",
+            "Properties" : {
+                "Description" : "Creates, deletes, or updates Elastic Transcoder pipelines as a custom resource in CloudFormation.",
+                "FunctionName" : "ElasticTranscoderPipeline",
+                "Handler"      : "ElasticTranscoderPipeline::BAMCIS.ElasticTranscoderPipeline.LambdaEntrypoint::Init",
+                "Runtime"      : "dotnetcore2.0",
+                "CodeUri"      : "",
+                "MemorySize"   : 256,
+                "Timeout"      : 300,
+                "Role"         : {
+                    "Fn::GetAtt" : [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Policies"     : null,
+                "Tags"         : {
+                    "Name" : "AreWeUp",
+                    "Environment" : {
+                        "Ref" : "EnvironmentTag"
+                    },
+                    "Application" : {
+                        "Ref" : "ApplicationTag"
+                    },
+                    "Organization" : {
+                        "Ref" : "OrganizationTag"
+                    }
+                }
+            }
+        }
+    },
+
+
+    "Outputs"                  : {
+        "Arn" : {
+            "Description" : "The Arn of the lambda function.",
+            "Value"       : {
+                "Fn::GetAtt" : [
+                    "LambdaFunction",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}
