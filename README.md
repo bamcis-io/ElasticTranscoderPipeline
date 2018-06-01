@@ -13,7 +13,7 @@ Deploy the CloudFormation template and Lambda function code. Use the ARN of the 
 property for the custom resource. For example, after this Lambda function is deployed, in the `RESOURCES` section of
 you CloudFormation template:
 
-     "Pipeline"                       : {
+	"Pipeline" : {
 		"Type" : "Custom::ElasticTranscoderPipeline",
 			"Properties" : {
                 "ServiceToken" : {
