@@ -1,0 +1,242 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "Automatically transcodes video uploaded to a specified bucket.",
+  "Parameters": {
+    "ElasticTranscoderPipelineArn": {
+      "Description": "The Arn of the Lambda function used to create Elastic Transcoder Pipelines.",
+      "Type": "String",
+      "Default": "arn:aws:lambda:us-east-1:252486826203:function:ElasticTranscoderPipeline",
+      "AllowedPattern": "^arn:aws(?:-us-gov|-cn)?:lambda:.*?:[0-9]{12}:function:.*$"
+    },
+    "PresetId": {
+      "Description": "The preset id the elastic transcoder jobs will use. The default is a 480p 16:9 mp4.",
+      "Type": "String",
+      "Default": "1351620000001-000020"
+    },
+    "InputBucket": {
+      "Description": "The bucket where the raw video will be uploaded to.",
+      "Type": "String",
+      "MinLength": 3,
+      "MaxLength": 63,
+      "AllowedPattern": "^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$",
+      "ConstraintDescription": "Member must satisfy regular expression pattern: ^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$"
+    },
+    "VideoOutputBucket": {
+      "Description": "The bucket where the transcoded videos will be stored.",
+      "Type": "String",
+      "MinLength": 3,
+      "MaxLength": 63,
+      "AllowedPattern": "^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$",
+      "ConstraintDescription": "Member must satisfy regular expression pattern: ^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$"
+    },
+    "ThumbnailBucket": {
+      "Description": "The bucket where the video thumbnails will be stored.",
+      "Type": "String",
+      "MinLength": 3,
+      "MaxLength": 63,
+      "AllowedPattern": "^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$",
+      "ConstraintDescription": "Member must satisfy regular expression pattern: ^[a-z](?:(?:\\.(?!\\.))|-|[a-zA-Z0-9]){1,61}[a-z]$"
+    },
+    "PipelineName": {
+      "Description": "The name of the pipeline",
+      "Type": "String",
+      "MinLength": 1,
+      "MaxLength": 40,
+      "Default": "VideoProcessor"
+    },
+    "NotificationEmail": {
+      "Description": "The email address notifications from Elastic Transcoder will be sent to.",
+      "Type": "String"
+    },
+    "OrganizationTag": {
+      "Description": "The organization this account is associated with",
+      "Type": "String",
+      "AllowedPattern": "^\\S{2,}$",
+      "ConstraintDescription": "Member must satisfy regular expression pattern: ^\\S{2,}$"
+    },
+    "ApplicationTag": {
+      "Description": "The application this account is associated with",
+      "Type": "String",
+      "AllowedPattern": "^\\S{2,}$",
+      "ConstraintDescription": "Member must satisfy regular expression pattern: ^\\S{2,}$",
+      "Default": "ElasticTranscoderPipelineTest"
+    },
+    "EnvironmentTag": {
+      "Description": "The environment this account is associated with",
+      "Type": "String",
+      "AllowedPattern": "^\\S{2,}$",
+      "ConstraintDescription": "Member must satisfy regular expression pattern: ^\\S{2,}$",
+      "Default": "dev"
+    }
+  },
+
+  "Conditions": {
+    "CreateSNS": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            { "Ref": "NotificationEmail" },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+
+  "Resources": {
+    "VideoInputBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Ref": "InputBucket" },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentTag" }
+          },
+          {
+            "Key": "Application",
+            "Value": { "Ref": "ApplicationTag" }
+          },
+          {
+            "Key": "Organization",
+            "Value": { "Ref": "OrganizationTag" }
+          }
+        ]
+      }
+    },
+    "VideoOutBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Ref": "VideoOutputBucket" },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentTag" }
+          },
+          {
+            "Key": "Application",
+            "Value": { "Ref": "ApplicationTag" }
+          },
+          {
+            "Key": "Organization",
+            "Value": { "Ref": "OrganizationTag" }
+          }
+        ]
+      }
+    },
+    "ThumbnailOutputBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Ref": "ThumbnailBucket" },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": { "Ref": "EnvironmentTag" }
+          },
+          {
+            "Key": "Application",
+            "Value": { "Ref": "ApplicationTag" }
+          },
+          {
+            "Key": "Organization",
+            "Value": { "Ref": "OrganizationTag" }
+          }
+        ]
+      }
+    },
+
+    "ElasticTranscoderExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "ElasticTranscoderExecutionRole",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [ "sts:AssumeRole" ],
+              "Principal": { "Service": [ "elastictranscoder.amazonaws.com" ] }
+            }
+          ]
+        }
+      }
+    },
+    "ElasticTranscoderS3Policy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "ElasticTranscoderS3Policy",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "1",
+              "Effect": "Allow",
+              "Action": [ "s3:Put*", "s3:ListBucket", "s3:*MultipartUpload*", "s3:Get*" ],
+              "Resource": [ "*" ]
+            },
+            {
+              "Sid": "2",
+              "Effect": "Deny",
+              "Action": [ "s3:*Delete*", "s3:*Policy*" ],
+              "Resource": [ "*" ]
+            }
+          ]
+        },
+        "Roles": [ { "Ref": "ElasticTranscoderExecutionRole" } ]
+      }
+    },
+    "ElasticTranscoderSNSPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "ElasticTranscoderSNSPolicy",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "3",
+              "Effect": "Allow",
+              "Action": [ "sns:Publish" ],
+              "Resource": [ { "Ref": "SNSTopic" } ]
+            },
+            {
+              "Sid": "4",
+              "Effect": "Deny",
+              "Action": [ "sns:*Remove*", "sns:*Delete*", "sns:*Permission*" ],
+              "Resource": [ "*" ]
+            }
+          ]
+        },
+        "Roles": [ { "Ref": "ElasticTranscoderExecutionRole" } ]
+      }
+    },
+
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Condition": "CreateSNS",
+      "Properties": {
+        "DisplayName": "ElasticTranscoderNotifications",
+        "Subscription": [
+          {
+            "Endpoint": { "Ref": "NotificationEmail" },
+            "Protocol": "email"
+          }
+        ],
+        "TopicName": "ElasticTranscoderNotifications"
+      }
+    },
+    "Pipeline": {
+      "Type": "Custom::ElasticTranscoderPipeline",
+      "Properties": {
+        "ServiceToken": { "Ref": "ElasticTranscoderPipelineArn" },
+        "Role": { "Fn::GetAtt": [ "ElasticTranscoderExecutionRole", "Arn" ] },
+        "Name": { "Ref": "PipelineName" },
+        "InputBucket": { "Ref": "InputBucket" },
+        "Notifications": { "Error": { "Ref": "SNSTopic" } },
+        "ContentConfig": { "Bucket": { "Ref": "VideoOutBucket" } },
+        "ThumbnailConfig": { "Bucket": { "Ref": "ThumbnailOutputBucket" } }
+      }
+    }
+  },
+  "Outputs": {}
+}

@@ -66,7 +66,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
             this._Context.LogInfo($"Received request:\n{JsonConvert.SerializeObject(request)}");
 
             CustomResourceResponse Response = null;
-
+            
             switch (request.RequestType)
             {
                 case CustomResourceRequest.StackOperation.CREATE:
@@ -126,11 +126,20 @@ namespace BAMCIS.ElasticTranscoderPipeline
                         }
                 }
 
-                this._Context.LogInfo($"Attempting to send response to pre-signed s3 url: {Obj.ToString()}");
+                string Content = Obj.ToString();
 
-                HttpWebResponse FinalResponse = await UploadResponse(request.ResponseUrl, Obj.ToString());
+                this._Context.LogInfo($"Attempting to send response to pre-signed s3 url: {Content}");
 
-                this._Context.LogInfo($"Submitted response with status code: {(int)FinalResponse.StatusCode}");
+                HttpResponseMessage FinalResponse = await UploadResponse(request.ResponseUrl, Content);
+
+                if ((int)FinalResponse.StatusCode < 200 || (int)FinalResponse.StatusCode > 299)
+                {
+                    this._Context.LogError($"Failed to submit response successfully: {(int)FinalResponse.StatusCode}\n{await FinalResponse.Content.ReadAsStringAsync()}");
+                }
+                else
+                {
+                    this._Context.LogInfo($"Successfully submitted response: {(int)FinalResponse.StatusCode}");
+                }
             }
             catch (HttpRequestException e)
             {
@@ -397,7 +406,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
         /// <param name="url">The pre-signed s3 url</param>
         /// <param name="content">The json serialized response</param>
         /// <returns></returns>
-        private static async Task<HttpWebResponse> UploadResponse(Uri url, string content)
+        private static async Task<HttpResponseMessage> UploadResponse(Uri url, string content)
         {
             if (url == null)
             {
@@ -409,44 +418,16 @@ namespace BAMCIS.ElasticTranscoderPipeline
                 throw new ArgumentNullException("content");
             }
 
-            /*
+            // Must use ByteArrayContent or StreamContent instead of StringContent because
+            // it sets the Content-Type header and causes a 403 error when submitting to the
+            // pre-signed s3 url
             HttpClient Client = new HttpClient();
             HttpRequestMessage Request = new HttpRequestMessage(HttpMethod.Put, url)
             {
-                Content = new StringContent(content, Encoding.UTF8, "application/json")
+                Content = new ByteArrayContent(Encoding.UTF8.GetBytes(content))
             };
 
             return await Client.SendAsync(Request);
-            */
-
-            HttpWebRequest HttpRequest = WebRequest.Create(url) as HttpWebRequest;
-            HttpRequest.Method = HttpMethod.Put.Method;
-
-            byte[] Bytes = Encoding.UTF8.GetBytes(content);
-
-            using (FileStream FStream = new FileStream("/tmp/temp.json", FileMode.Create))
-            {
-                FStream.Write(Bytes, 0, Bytes.Length);
-            }
-
-            using (Stream DataStream = HttpRequest.GetRequestStream())
-            {
-                byte[] Buffer = new byte[8192];
-                using (FileStream FStream = new FileStream("/tmp/temp.json", FileMode.Open, FileAccess.Read))
-                {
-                    int BytesRead = 0;
-
-                    while ((BytesRead = FStream.Read(Buffer, 0, Buffer.Length)) > 0)
-                    {
-                        DataStream.Write(Buffer, 0, BytesRead);
-                    }
-                }
-            }
-
-            File.Delete("/tmp/temp.json");
-
-            HttpWebResponse Response = await HttpRequest.GetResponseAsync() as HttpWebResponse;
-            return Response;
         }
 
         /// <summary>
@@ -455,7 +436,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
         /// <param name="url">The pre-signed s3 url</param>
         /// <param name="content">The json serialized response</param>
         /// <returns></returns>
-        private static async Task<HttpWebResponse> UploadResponse(string url, string content)
+        private static async Task<HttpResponseMessage> UploadResponse(string url, string content)
         {
             return await UploadResponse(new Uri(url), content);
         }
