@@ -4,10 +4,14 @@ using Amazon.Lambda.Core;
 using BAMCIS.AWSLambda.Common;
 using BAMCIS.AWSLambda.Common.Events;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
@@ -87,8 +91,46 @@ namespace BAMCIS.ElasticTranscoderPipeline
             }
 
             try
-            {
-                HttpResponseMessage FinalResponse = await UploadResponse(request.ResponseUrl, JsonConvert.SerializeObject(Response));
+            {                
+                JObject Obj = JObject.FromObject(Response);
+
+                switch (request.RequestType)
+                {
+                    case CustomResourceRequest.StackOperation.CREATE:
+                    case CustomResourceRequest.StackOperation.UPDATE:
+                        {
+                            if (Response.Status == CustomResourceResponse.RequestStatus.FAILED)
+                            {
+                                Obj.Remove("NoEcho");
+                                Obj.Remove("Data");
+                            }
+                            
+                            break;
+                        }
+                    case CustomResourceRequest.StackOperation.DELETE:
+                        {
+                            Obj.Remove("NoEcho");
+                            Obj.Remove("Data");
+
+                            if (Response.Status == CustomResourceResponse.RequestStatus.SUCCESS)
+                            {
+                                Obj.Remove("Reason");
+                            }
+
+                            break;
+                        }
+                    default:
+                        {
+                            this._Context.LogError($"Unknown request type: {request.RequestType}.");
+                            break;
+                        }
+                }
+
+                this._Context.LogInfo($"Attempting to send response to pre-signed s3 url: {Obj.ToString()}");
+
+                HttpWebResponse FinalResponse = await UploadResponse(request.ResponseUrl, Obj.ToString());
+
+                this._Context.LogInfo($"Submitted response with status code: {(int)FinalResponse.StatusCode}");
             }
             catch (HttpRequestException e)
             {
@@ -113,6 +155,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
         {
             try
             {
+                this._Context.LogInfo("Attempting to create a pipeline.");
                 CreatePipelineRequest PipelineRequest = JsonConvert.DeserializeObject<CreatePipelineRequest>(JsonConvert.SerializeObject(request.ResourceProperties));
                 CreatePipelineResponse CreateResponse = await this._ETClient.CreatePipelineAsync(PipelineRequest);
 
@@ -125,31 +168,44 @@ namespace BAMCIS.ElasticTranscoderPipeline
                     return new CustomResourceResponse(
                         CustomResourceResponse.RequestStatus.SUCCESS,
                         $"See the details in CloudWatch Log Stream: {this._Context.LogStreamName}.",
-                        request,
+                        CreateResponse.Pipeline.Id,
+                        request.StackId,
+                        request.RequestId,
+                        request.LogicalResourceId,
                         false,
                         new Dictionary<string, object>()
                         {
-                        {"Name", CreateResponse.Pipeline.Name },
-                        {"Arn", CreateResponse.Pipeline.Arn },
-                        {"Id", CreateResponse.Pipeline.Id }
+                            {"Name", CreateResponse.Pipeline.Name },
+                            {"Arn", CreateResponse.Pipeline.Arn },
+                            {"Id", CreateResponse.Pipeline.Id }
                         }
                     );
                 }
             }
             catch (AmazonElasticTranscoderException e)
             {
+                this._Context.LogError(e);
+
                 return new CustomResourceResponse(
                     CustomResourceResponse.RequestStatus.FAILED,
-                    JsonConvert.SerializeObject(e),
-                    request
+                    e.Message,
+                    Guid.NewGuid().ToString(),
+                    request.StackId,
+                    request.RequestId,
+                    request.LogicalResourceId
                 );
             }
             catch (Exception e)
             {
+                this._Context.LogError(e);
+
                 return new CustomResourceResponse(
                     CustomResourceResponse.RequestStatus.FAILED,
-                    JsonConvert.SerializeObject(e),
-                    request
+                    e.Message,
+                    Guid.NewGuid().ToString(),
+                    request.StackId,
+                    request.RequestId,
+                    request.LogicalResourceId
                 );
             }
         }
@@ -163,24 +219,58 @@ namespace BAMCIS.ElasticTranscoderPipeline
         {
             try
             {
-                DeletePipelineRequest PipelineRequest = new DeletePipelineRequest()
-                {
-                    Id = request.PhysicalResourceId
-                };
+                this._Context.LogInfo("Attempting to delete a pipeline.");
 
-                DeletePipelineResponse DeleteResponse = await this._ETClient.DeletePipelineAsync(PipelineRequest);
+                ListPipelinesRequest Listing = new ListPipelinesRequest();
 
-                if ((int)DeleteResponse.HttpStatusCode < 200 || (int)DeleteResponse.HttpStatusCode > 299)
+                List<Pipeline> Pipelines = new List<Pipeline>();
+                ListPipelinesResponse Pipes;
+
+                do
                 {
-                    return new CustomResourceResponse(CustomResourceResponse.RequestStatus.FAILED, $"Received HTTP status code {(int)DeleteResponse.HttpStatusCode}.", request);
+                    Pipes = await this._ETClient.ListPipelinesAsync(Listing);
+
+                    Pipelines.AddRange(Pipes.Pipelines.Where(x => x.Name.Equals(request.ResourceProperties["Name"] as string) &&
+                        x.InputBucket.Equals(request.ResourceProperties["InputBucket"]) &&
+                        x.Role.Equals(request.ResourceProperties["Role"])
+                    ));
+
+                } while (Pipes.NextPageToken != null);
+
+                if (Pipelines.Count > 1)
+                {
+                    this._Context.LogWarning($"{Pipelines.Count} pipelines were found matching the Name, InputBucket, and Role specified.");
+                }
+
+                if (Pipelines.Count > 0)
+                {
+                    DeletePipelineRequest PipelineRequest = new DeletePipelineRequest()
+                    {
+                        Id = Pipelines.First().Id
+                    };
+
+                    DeletePipelineResponse DeleteResponse = await this._ETClient.DeletePipelineAsync(PipelineRequest);
+
+                    if ((int)DeleteResponse.HttpStatusCode < 200 || (int)DeleteResponse.HttpStatusCode > 299)
+                    {
+                        return new CustomResourceResponse(CustomResourceResponse.RequestStatus.FAILED, $"Received HTTP status code {(int)DeleteResponse.HttpStatusCode}.", request);
+                    }
+                    else
+                    {
+                        return new CustomResourceResponse(
+                            CustomResourceResponse.RequestStatus.SUCCESS,
+                            $"See the details in CloudWatch Log Stream: {this._Context.LogStreamName}.",
+                            request,
+                            false
+                        );
+                    }
                 }
                 else
                 {
                     return new CustomResourceResponse(
                         CustomResourceResponse.RequestStatus.SUCCESS,
-                        $"See the details in CloudWatch Log Stream: {this._Context.LogStreamName}.",
-                        request,
-                        false
+                        "No pipelines could be found with the matching characteristics.",
+                        request
                     );
                 }
             }
@@ -199,7 +289,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
                 {
                     return new CustomResourceResponse(
                         CustomResourceResponse.RequestStatus.FAILED,
-                        JsonConvert.SerializeObject(e),
+                        e.Message,
                         request
                     );
                 }
@@ -208,7 +298,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
             {
                 return new CustomResourceResponse(
                     CustomResourceResponse.RequestStatus.FAILED,
-                    JsonConvert.SerializeObject(e),
+                    e.Message,
                     request
                 );
             }
@@ -223,26 +313,63 @@ namespace BAMCIS.ElasticTranscoderPipeline
         {
             try
             {
-                UpdatePipelineRequest PipelineRequest = JsonConvert.DeserializeObject<UpdatePipelineRequest>(JsonConvert.SerializeObject(request.ResourceProperties));
-                UpdatePipelineResponse UpdateResponse = await this._ETClient.UpdatePipelineAsync(PipelineRequest);
+                this._Context.LogInfo("Initiating update for pipeline.");
 
-                if ((int)UpdateResponse.HttpStatusCode < 200 || (int)UpdateResponse.HttpStatusCode > 299)
+                UpdatePipelineRequest PipelineRequest = JsonConvert.DeserializeObject<UpdatePipelineRequest>(JsonConvert.SerializeObject(request.ResourceProperties));
+
+                ListPipelinesRequest Listing = new ListPipelinesRequest();
+
+                List<Pipeline> Pipelines = new List<Pipeline>();
+                ListPipelinesResponse Pipes;
+
+                do
                 {
-                    return new CustomResourceResponse(CustomResourceResponse.RequestStatus.FAILED, $"Received HTTP status code {(int)UpdateResponse.HttpStatusCode}.", request);
+                    Pipes = await this._ETClient.ListPipelinesAsync(Listing);
+
+                    Pipelines.AddRange(Pipes.Pipelines.Where(x => x.Name.Equals(request.ResourceProperties["Name"] as string) &&
+                        x.InputBucket.Equals(request.ResourceProperties["InputBucket"]) &&
+                        x.Role.Equals(request.ResourceProperties["Role"])
+                    ));
+
+                } while (Pipes.NextPageToken != null);
+
+                if (Pipelines.Count > 1)
+                {
+                    this._Context.LogWarning($"{Pipelines.Count} pipelines were found matching the Name, InputBucket, and Role specified.");
+                }
+
+                if (Pipelines.Count > 0)
+                {
+                    PipelineRequest.Id = Pipelines.First().Id;
+
+                    UpdatePipelineResponse UpdateResponse = await this._ETClient.UpdatePipelineAsync(PipelineRequest);
+
+                    if ((int)UpdateResponse.HttpStatusCode < 200 || (int)UpdateResponse.HttpStatusCode > 299)
+                    {
+                        return new CustomResourceResponse(CustomResourceResponse.RequestStatus.FAILED, $"Received HTTP status code {(int)UpdateResponse.HttpStatusCode}.", request);
+                    }
+                    else
+                    {
+                        return new CustomResourceResponse(
+                            CustomResourceResponse.RequestStatus.SUCCESS,
+                            $"See the details in CloudWatch Log Stream: {this._Context.LogStreamName}.",
+                            request,
+                            false,
+                            new Dictionary<string, object>()
+                            {
+                                {"Name", UpdateResponse.Pipeline.Name },
+                                {"Arn", UpdateResponse.Pipeline.Arn },
+                                {"Id", UpdateResponse.Pipeline.Id }
+                            }
+                        );
+                    }
                 }
                 else
                 {
                     return new CustomResourceResponse(
-                        CustomResourceResponse.RequestStatus.SUCCESS,
-                        $"See the details in CloudWatch Log Stream: {this._Context.LogStreamName}.",
-                        request,
-                        false,
-                        new Dictionary<string, object>()
-                        {
-                        {"name", UpdateResponse.Pipeline.Name },
-                        {"arn", UpdateResponse.Pipeline.Arn },
-                        {"id", UpdateResponse.Pipeline.Id }
-                        }
+                        CustomResourceResponse.RequestStatus.FAILED,
+                        "No pipelines could be found with the matching characteristics.",
+                        request
                     );
                 }
             }
@@ -250,7 +377,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
             {
                 return new CustomResourceResponse(
                     CustomResourceResponse.RequestStatus.FAILED,
-                    JsonConvert.SerializeObject(e),
+                    e.Message,
                     request
                 );
             }
@@ -258,7 +385,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
             {
                 return new CustomResourceResponse(
                     CustomResourceResponse.RequestStatus.FAILED,
-                    JsonConvert.SerializeObject(e),
+                    e.Message,
                     request
                 );
             }
@@ -270,7 +397,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
         /// <param name="url">The pre-signed s3 url</param>
         /// <param name="content">The json serialized response</param>
         /// <returns></returns>
-        private static async Task<HttpResponseMessage> UploadResponse(Uri url, string content)
+        private static async Task<HttpWebResponse> UploadResponse(Uri url, string content)
         {
             if (url == null)
             {
@@ -282,13 +409,44 @@ namespace BAMCIS.ElasticTranscoderPipeline
                 throw new ArgumentNullException("content");
             }
 
+            /*
             HttpClient Client = new HttpClient();
             HttpRequestMessage Request = new HttpRequestMessage(HttpMethod.Put, url)
             {
-                Content = new StringContent(content)
+                Content = new StringContent(content, Encoding.UTF8, "application/json")
             };
 
             return await Client.SendAsync(Request);
+            */
+
+            HttpWebRequest HttpRequest = WebRequest.Create(url) as HttpWebRequest;
+            HttpRequest.Method = HttpMethod.Put.Method;
+
+            byte[] Bytes = Encoding.UTF8.GetBytes(content);
+
+            using (FileStream FStream = new FileStream("/tmp/temp.json", FileMode.Create))
+            {
+                FStream.Write(Bytes, 0, Bytes.Length);
+            }
+
+            using (Stream DataStream = HttpRequest.GetRequestStream())
+            {
+                byte[] Buffer = new byte[8192];
+                using (FileStream FStream = new FileStream("/tmp/temp.json", FileMode.Open, FileAccess.Read))
+                {
+                    int BytesRead = 0;
+
+                    while ((BytesRead = FStream.Read(Buffer, 0, Buffer.Length)) > 0)
+                    {
+                        DataStream.Write(Buffer, 0, BytesRead);
+                    }
+                }
+            }
+
+            File.Delete("/tmp/temp.json");
+
+            HttpWebResponse Response = await HttpRequest.GetResponseAsync() as HttpWebResponse;
+            return Response;
         }
 
         /// <summary>
@@ -297,7 +455,7 @@ namespace BAMCIS.ElasticTranscoderPipeline
         /// <param name="url">The pre-signed s3 url</param>
         /// <param name="content">The json serialized response</param>
         /// <returns></returns>
-        private static async Task<HttpResponseMessage> UploadResponse(string url, string content)
+        private static async Task<HttpWebResponse> UploadResponse(string url, string content)
         {
             return await UploadResponse(new Uri(url), content);
         }
