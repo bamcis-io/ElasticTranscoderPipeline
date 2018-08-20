@@ -56,5 +56,8 @@ And this will create an Elastic Transcoder Pipeline with the parameters specifie
 
 ## Revision History
 
+### 1.0.1
+Updated custom resource creation logic.
+
 ### 1.0.0
 Initial release of the application.

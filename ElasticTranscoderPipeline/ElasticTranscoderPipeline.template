@@ -186,7 +186,7 @@
             "Properties" : {
                 "Description" : "Creates, deletes, or updates Elastic Transcoder pipelines as a custom resource in CloudFormation.",
                 "FunctionName" : "ElasticTranscoderPipeline",
-                "Handler"      : "ElasticTranscoderPipeline::BAMCIS.ElasticTranscoderPipeline.LambdaEntrypoint::Init",
+                "Handler"      : "ElasticTranscoderPipeline::BAMCIS.LambdaFunctions.ElasticTranscoderPipeline.Entrypoint::ExecuteAsync",
                 "Runtime"      : "dotnetcore2.0",
                 "CodeUri"      : "",
                 "MemorySize"   : 256,

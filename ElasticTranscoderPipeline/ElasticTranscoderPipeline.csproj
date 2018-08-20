@@ -1,26 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
-    <RootNamespace>BAMCIS.ElasticTranscoderPipeline</RootNamespace>
-    <Description>
-Creates a serverless application that can be used as a custom resource in CloudFormation to create
+    <RootNamespace>BAMCIS.LambdaFunctions.ElasticTranscoderPipeline</RootNamespace>
+    <Description>Creates a serverless application that can be used as a custom resource in CloudFormation to create
 Elastic Transcoder Pipelines.</Description>
-    <Copyright>BAMCIS</Copyright>
+    <Copyright>bamcis.io</Copyright>
     <PackageLicenseUrl>https://raw.githubusercontent.com/bamcis-io/ElasticTranscoderPipeline/master/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/bamcis-io/ElasticTranscoderPipeline</PackageProjectUrl>
     <RepositoryUrl>https://github.com/bamcis-io/ElasticTranscoderPipeline</RepositoryUrl>
     <RepositoryType>Git</RepositoryType>
     <PackageTags>AWS ElasticTranscoder Lambda</PackageTags>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <Authors>Michael Haken</Authors>
+    <Company>bamcis.io</Company>
+    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Amazon.Lambda.Core" Version="1.0.0" />
-    <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="1.2.0" />
-    <PackageReference Include="AWSSDK.ElasticTranscoder" Version="3.3.1.25" />
-    <PackageReference Include="BAMCIS.AWSLambda.Common" Version="1.1.2" />
+    <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="1.3.0" />
+    <PackageReference Include="AWSSDK.ElasticTranscoder" Version="3.3.1.34" />
+    <PackageReference Include="BAMCIS.AWSLambda.Common" Version="1.7.2" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
   </ItemGroup>
 

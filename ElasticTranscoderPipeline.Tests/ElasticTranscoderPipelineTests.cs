@@ -8,11 +8,10 @@ using Amazon.Lambda.Core;
 using Amazon.Lambda.TestUtilities;
 using Amazon.Lambda.APIGatewayEvents;
 
-using ElasticTranscoderCustomResource;
 using System.Net.Http;
 using System.Net;
 
-namespace ElasticTranscoderCustomResource.Tests
+namespace BAMCIS.LamdbaFucntions.ElasticTranscoderPipeline.Tests
 {
     public class ElasticTranscoderPipelineTests
     {
