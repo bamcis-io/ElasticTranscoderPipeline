@@ -24,7 +24,7 @@ Elastic Transcoder Pipelines.</Description>
     <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="1.3.0" />
     <PackageReference Include="AWSSDK.ElasticTranscoder" Version="3.3.1.34" />
     <PackageReference Include="BAMCIS.AWSLambda.Common" Version="1.7.2" />
-    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
   </ItemGroup>
 
   <ItemGroup>
